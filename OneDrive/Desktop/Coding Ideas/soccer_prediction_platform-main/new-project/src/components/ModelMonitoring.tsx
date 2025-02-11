@@ -1,63 +1,28 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box,
-  Grid,
+  VStack,
   Heading,
   Text,
-  VStack,
-  HStack,
-  Alert,
-  AlertIcon,
-  AlertTitle,
-  AlertDescription,
+  SimpleGrid,
   Stat,
   StatLabel,
   StatNumber,
   StatHelpText,
-  StatArrow,
-  Tabs,
-  TabList,
-  TabPanels,
-  Tab,
-  TabPanel,
+  Table,
+  Thead,
+  Tbody,
+  Tr,
+  Th,
+  Td,
+  Alert,
+  AlertIcon,
   useColorModeValue,
+  Select,
+  HStack,
 } from '@chakra-ui/react';
-import {
-  Line,
-  Bar,
-  Radar,
-  Doughnut
-} from 'react-chartjs-2';
-import {
-  Chart as ChartJS,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  RadialLinearScale,
-  ArcElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler,
-} from 'chart.js';
+import { Line, Bar } from 'react-chartjs-2';
 import { format } from 'date-fns';
-
-// Register ChartJS components
-ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  PointElement,
-  LineElement,
-  BarElement,
-  RadialLinearScale,
-  ArcElement,
-  Title,
-  Tooltip,
-  Legend,
-  Filler
-);
 
 interface MonitoringData {
   model_metrics: {
@@ -103,197 +68,144 @@ interface MonitoringData {
 }
 
 const ModelMonitoring: React.FC = () => {
-  const [data, setData] = useState<MonitoringData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
+  const [monitoringData, setMonitoringData] = useState<MonitoringData | null>(null);
+  const [selectedTimeframe, setSelectedTimeframe] = useState<string>('7d');
+  const [selectedMetric, setSelectedMetric] = useState<string>('accuracy');
+  
   const bgColor = useColorModeValue('white', 'gray.800');
   const borderColor = useColorModeValue('gray.200', 'gray.700');
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch('/api/v1/predictions/model/monitoring');
-        const jsonData = await response.json();
-        setData(jsonData);
-      } catch (err) {
-        setError('Failed to fetch monitoring data');
-      } finally {
-        setIsLoading(false);
+        const response = await fetch(`/api/model-monitoring?timeframe=${selectedTimeframe}`);
+        const data = await response.json();
+        setMonitoringData(data);
+      } catch (error) {
+        console.error('Error fetching monitoring data:', error);
       }
     };
 
     fetchData();
     const interval = setInterval(fetchData, 300000); // Refresh every 5 minutes
-
     return () => clearInterval(interval);
-  }, []);
+  }, [selectedTimeframe]);
 
-  if (isLoading) {
-    return <Text>Loading monitoring data...</Text>;
+  if (!monitoringData) {
+    return <Box>Loading...</Box>;
   }
 
-  if (error || !data) {
-    return <Alert status="error">{error || 'Failed to load data'}</Alert>;
-  }
+  const modelMetricsData = {
+    labels: ['Accuracy', 'Precision', 'Recall', 'F1 Score'],
+    datasets: [{
+      label: 'Model Metrics',
+      data: [
+        monitoringData.model_metrics.accuracy * 100,
+        monitoringData.model_metrics.precision * 100,
+        monitoringData.model_metrics.recall * 100,
+        monitoringData.model_metrics.f1_score * 100
+      ],
+      backgroundColor: 'rgba(75, 192, 192, 0.2)',
+      borderColor: 'rgba(75, 192, 192, 1)',
+      borderWidth: 1
+    }]
+  };
 
   const roiChartData = {
-    labels: Object.keys(data.roi_analysis.monthly_roi),
+    labels: Object.keys(monitoringData.roi_analysis.monthly_roi),
     datasets: [{
       label: 'Monthly ROI',
-      data: Object.values(data.roi_analysis.monthly_roi),
-      fill: true,
-      borderColor: 'rgb(75, 192, 192)',
-      backgroundColor: 'rgba(75, 192, 192, 0.2)',
-    }],
-  };
-
-  const leaguePerformanceData = {
-    labels: Object.keys(data.accuracy_report.league_metrics),
-    datasets: [{
-      label: 'League Accuracy',
-      data: Object.values(data.accuracy_report.league_metrics).map(m => m.accuracy),
-      backgroundColor: 'rgba(54, 162, 235, 0.5)',
-    }],
-  };
-
-  const edgeDistributionData = {
-    labels: Object.keys(data.betting_edge.edge_distribution),
-    datasets: [{
-      data: Object.values(data.betting_edge.edge_distribution),
-      backgroundColor: [
-        'rgba(255, 99, 132, 0.5)',
-        'rgba(54, 162, 235, 0.5)',
-        'rgba(255, 206, 86, 0.5)',
-      ],
-    }],
+      data: Object.values(monitoringData.roi_analysis.monthly_roi).map(roi => roi * 100),
+      borderColor: 'rgb(255, 99, 132)',
+      tension: 0.1
+    }]
   };
 
   return (
-    <Box p={6} bg={bgColor} borderRadius="lg" shadow="base" borderWidth="1px" borderColor={borderColor}>
-      <VStack spacing={6} align="stretch">
-        <Heading size="lg">Model Monitoring Dashboard</Heading>
+    <VStack spacing={6} align="stretch">
+      <Box p={6} bg={bgColor} borderRadius="lg" borderWidth="1px" borderColor={borderColor}>
+        <VStack spacing={4} align="stretch">
+          <HStack justify="space-between">
+            <Heading size="md">Model Performance Monitoring</Heading>
+            <Select
+              value={selectedTimeframe}
+              onChange={(e) => setSelectedTimeframe(e.target.value)}
+              width="200px"
+            >
+              <option value="7d">Last 7 Days</option>
+              <option value="30d">Last 30 Days</option>
+              <option value="90d">Last 90 Days</option>
+            </Select>
+          </HStack>
 
-        {/* Alerts Section */}
-        {data.alerts.length > 0 && (
-          <VStack spacing={3} align="stretch">
-            {data.alerts.map((alert, index) => (
-              <Alert key={index} status={alert.type}>
-                <AlertIcon />
-                <Box>
-                  <AlertTitle>{alert.type.toUpperCase()}</AlertTitle>
-                  <AlertDescription>
-                    {alert.message}
-                    <Text fontSize="sm" color="gray.500">
-                      {format(new Date(alert.timestamp), 'PPp')}
-                    </Text>
-                  </AlertDescription>
-                </Box>
-              </Alert>
-            ))}
-          </VStack>
-        )}
+          {/* Alerts Section */}
+          {monitoringData.alerts.map((alert, index) => (
+            <Alert key={index} status={alert.type} borderRadius="md">
+              <AlertIcon />
+              <Text>{alert.message}</Text>
+            </Alert>
+          ))}
 
-        {/* Key Metrics */}
-        <Grid templateColumns="repeat(4, 1fr)" gap={4}>
-          <Stat>
-            <StatLabel>Model Accuracy</StatLabel>
-            <StatNumber>{(data.model_metrics.accuracy * 100).toFixed(1)}%</StatNumber>
-            <StatHelpText>
-              <StatArrow type={data.model_metrics.accuracy > 0.6 ? 'increase' : 'decrease'} />
-              Overall Performance
-            </StatHelpText>
-          </Stat>
-          <Stat>
-            <StatLabel>ROI</StatLabel>
-            <StatNumber>{(data.roi_analysis.overall_roi * 100).toFixed(1)}%</StatNumber>
-            <StatHelpText>
-              <StatArrow type={data.roi_analysis.overall_roi > 0 ? 'increase' : 'decrease'} />
-              Return on Investment
-            </StatHelpText>
-          </Stat>
-          <Stat>
-            <StatLabel>Value Bets Success</StatLabel>
-            <StatNumber>
-              {((data.betting_edge.successful_value_bets / data.betting_edge.total_value_bets) * 100).toFixed(1)}%
-            </StatNumber>
-            <StatHelpText>
-              {data.betting_edge.successful_value_bets} of {data.betting_edge.total_value_bets} bets
-            </StatHelpText>
-          </Stat>
-          <Stat>
-            <StatLabel>Average Edge</StatLabel>
-            <StatNumber>{(data.betting_edge.average_edge * 100).toFixed(1)}%</StatNumber>
-            <StatHelpText>
-              Betting Value Edge
-            </StatHelpText>
-          </Stat>
-        </Grid>
+          {/* Key Metrics */}
+          <SimpleGrid columns={{ base: 1, md: 2, lg: 4 }} spacing={4}>
+            <Stat>
+              <StatLabel>Overall Accuracy</StatLabel>
+              <StatNumber>{(monitoringData.accuracy_report.overall_accuracy * 100).toFixed(1)}%</StatNumber>
+              <StatHelpText>Based on {monitoringData.accuracy_report.total_predictions} predictions</StatHelpText>
+            </Stat>
+            <Stat>
+              <StatLabel>Value Betting Accuracy</StatLabel>
+              <StatNumber>{(monitoringData.model_insights.value_betting_accuracy * 100).toFixed(1)}%</StatNumber>
+              <StatHelpText>For high-value opportunities</StatHelpText>
+            </Stat>
+            <Stat>
+              <StatLabel>Overall ROI</StatLabel>
+              <StatNumber>{(monitoringData.roi_analysis.overall_roi * 100).toFixed(1)}%</StatNumber>
+              <StatHelpText>Return on Investment</StatHelpText>
+            </Stat>
+            <Stat>
+              <StatLabel>Average Edge</StatLabel>
+              <StatNumber>{(monitoringData.betting_edge.average_edge * 100).toFixed(1)}%</StatNumber>
+              <StatHelpText>{monitoringData.betting_edge.total_value_bets} value bets identified</StatHelpText>
+            </Stat>
+          </SimpleGrid>
 
-        {/* Detailed Analysis Tabs */}
-        <Tabs variant="enclosed">
-          <TabList>
-            <Tab>ROI Analysis</Tab>
-            <Tab>League Performance</Tab>
-            <Tab>Betting Edge</Tab>
-          </TabList>
+          {/* Model Metrics Chart */}
+          <Box height="300px">
+            <Bar data={modelMetricsData} options={{ maintainAspectRatio: false }} />
+          </Box>
 
-          <TabPanels>
-            <TabPanel>
-              <Box h="400px">
-                <Line 
-                  data={roiChartData}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      title: {
-                        display: true,
-                        text: 'Monthly ROI Trend'
-                      }
-                    }
-                  }}
-                />
-              </Box>
-            </TabPanel>
-            <TabPanel>
-              <Box h="400px">
-                <Bar
-                  data={leaguePerformanceData}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      title: {
-                        display: true,
-                        text: 'League Performance Analysis'
-                      }
-                    }
-                  }}
-                />
-              </Box>
-            </TabPanel>
-            <TabPanel>
-              <Box h="400px">
-                <Doughnut
-                  data={edgeDistributionData}
-                  options={{
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                      title: {
-                        display: true,
-                        text: 'Edge Distribution'
-                      }
-                    }
-                  }}
-                />
-              </Box>
-            </TabPanel>
-          </TabPanels>
-        </Tabs>
-      </VStack>
-    </Box>
+          {/* ROI Trend Chart */}
+          <Box height="300px">
+            <Line data={roiChartData} options={{ maintainAspectRatio: false }} />
+          </Box>
+
+          {/* League Performance Table */}
+          <Box overflowX="auto">
+            <Table variant="simple">
+              <Thead>
+                <Tr>
+                  <Th>League</Th>
+                  <Th isNumeric>Accuracy</Th>
+                  <Th isNumeric>ROI</Th>
+                  <Th isNumeric>Total Predictions</Th>
+                </Tr>
+              </Thead>
+              <Tbody>
+                {Object.entries(monitoringData.accuracy_report.league_metrics).map(([league, metrics]) => (
+                  <Tr key={league}>
+                    <Td>{league}</Td>
+                    <Td isNumeric>{(metrics.accuracy * 100).toFixed(1)}%</Td>
+                    <Td isNumeric>{(monitoringData.roi_analysis.by_league_roi[league] * 100).toFixed(1)}%</Td>
+                    <Td isNumeric>{metrics.total}</Td>
+                  </Tr>
+                ))}
+              </Tbody>
+            </Table>
+          </Box>
+        </VStack>
+      </Box>
+    </VStack>
   );
 };
 

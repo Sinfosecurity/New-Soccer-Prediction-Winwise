@@ -1,9 +1,25 @@
 import { api } from './api';
-import type { AxiosResponse } from 'axios';
+
+interface DetailedStats {
+  profit_loss: number;
+  roi: number;
+  win_streak: number;
+  loss_streak: number;
+  average_odds: number;
+  value_bets_won: number;
+  value_bets_total: number;
+}
+
+interface LeaguePerformance {
+  league_name: string;
+  accuracy: number;
+  total_bets: number;
+  profit_loss: number;
+}
 
 interface PredictionHistoryItem {
   date: string;
-  accuracy: number;
+  accuracy: number | null;
   correct: number;
   total: number;
 }
@@ -22,14 +38,14 @@ interface RecentPrediction {
   match_time: string;
   prediction: string | null;
   confidence: number | null;
-  status: 'scheduled' | 'in_progress' | 'completed';
+  status: 'pending' | 'won' | 'lost' | 'void' | 'scheduled' | 'in_progress';
 }
 
 export interface DashboardFilters {
   search?: string;
   competition?: string;
-  sortBy?: 'date' | 'competition' | 'confidence';
-  sortOrder?: 'asc' | 'desc';
+  sortBy: 'date' | 'competition' | 'confidence';
+  sortOrder: 'asc' | 'desc';
 }
 
 export interface DashboardStats {
@@ -41,6 +57,9 @@ export interface DashboardStats {
   stats_summary: StatsSummary;
   recent_predictions: RecentPrediction[];
   available_competitions: string[];
+  detailed_stats: DetailedStats;
+  league_performance: LeaguePerformance[];
+  prediction_distribution: Record<string, number>;
 }
 
 class DashboardService {
